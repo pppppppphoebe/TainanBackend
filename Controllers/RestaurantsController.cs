@@ -32,23 +32,27 @@ public class RestaurantsController : ControllerBase
         return Ok(restaurants); // Ok() -> HTTP 200，把資料回傳給前端
     }
 
-    // [HttpGet("random")] -> 處理 GET /api/restaurants/random
+
     [HttpGet("random")]
-    public async Task<ActionResult<Restaurant>> GetRandom()
+    public async Task<ActionResult<IEnumerable<Restaurant>>> GetRandom([FromQuery] int count = 1)
     {
-        // CountAsync() -> SQL：SELECT COUNT(*) FROM restaurants
-        var count = await _context.Restaurants.CountAsync();
-        
-        // Random.Shared.Next(count) -> 產生 0 到 count-1 的隨機數字
-        var skip = Random.Shared.Next(count);
-        
-        // Skip(skip).FirstOrDefaultAsync() -> SQL：SELECT * FROM restaurants OFFSET skip LIMIT 1
-        var restaurant = await _context.Restaurants.Skip(skip).FirstOrDefaultAsync();
-        
-        if (restaurant == null)
-            return NotFound(); // HTTP 404，找不到
-            
-        return Ok(restaurant); // HTTP 200，回傳隨機選到的餐廳
+        // 1. 取得資料庫總筆數
+        var totalCount = await _context.Restaurants.CountAsync();
+
+        // 2. 防呆機制：如果資料庫是空的
+        if (totalCount == 0) return NotFound("資料庫內沒有餐廳。");
+
+        // 3. 防呆機制：請求數量不能超過總數，也不能小於 1
+        int limit = Math.Min(count, totalCount);
+        if (limit <= 0) limit = 1;
+
+        // 4. 隨機排序並取得指定數量
+        var restaurants = await _context.Restaurants
+            .OrderBy(r => Guid.NewGuid())
+            .Take(limit)
+            .ToListAsync();
+
+        return Ok(restaurants);
     }
 
     // [HttpGet("{id}")] -> 處理 GET /api/restaurants/5
